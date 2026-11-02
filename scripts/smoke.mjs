@@ -54,8 +54,9 @@ try {
 			console.log(`loaded: ${extension.path}`);
 			console.log(`commands: ${commands.join(", ") || "(none)"}`);
 			console.log(`shortcuts: ${shortcuts.join(", ") || "(none)"}`);
-			if (!commands.includes("keymap")) {
-				console.error("ERROR: /keymap was not registered");
+			const missing = ["keymap", "keybindings", "shortcuts"].filter((name) => !commands.includes(name));
+			if (missing.length > 0) {
+				console.error(`ERROR: missing commands: ${missing.join(", ")}`);
 				process.exitCode = 1;
 			}
 			if (shortcuts.length === 0) {

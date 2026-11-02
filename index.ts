@@ -247,87 +247,93 @@ export default function keymapExtension(pi: ExtensionAPI): void {
 		}
 	});
 
-	pi.registerCommand("keymap", {
-		description: "Editar los atajos de teclado guardados en keymap.json",
-		handler: async (args, ctx) => {
-			if (args.trim() === "reset") {
-				writeKeymap(path, DEFAULT_BINDINGS);
-				ctx.ui.notify("keymap.json recreado con los atajos por defecto.", "info");
-				await ctx.reload();
-				return;
+	const openKeymap = async (args: string, ctx: ExtensionCommandContext): Promise<void> => {
+		if (args.trim() === "reset") {
+			writeKeymap(path, DEFAULT_BINDINGS);
+			ctx.ui.notify("keymap.json recreado con los atajos por defecto.", "info");
+			await ctx.reload();
+			return;
+		}
+		if (ctx.mode !== "tui" || !ctx.hasUI) {
+			ctx.ui.notify(`keymap.json: ${path}`, "info");
+			return;
+		}
+		if (loaded.status === "malformed") {
+			ctx.ui.notify(`keymap.json inválido: ${loaded.problem}. Usá /keymap reset.`, "error");
+			return;
+		}
+
+		let bindings = dedupeBindings(loaded.bindings);
+		let dirty = false;
+		let note = loaded.status === "defaults" ? "todavía sin archivo: se guarda al cambiar algo" : undefined;
+
+		for (;;) {
+			const intent = await openList(ctx, bindings, path, note);
+			if (!intent) break;
+			note = undefined;
+
+			if (intent.kind === "reset") {
+				bindings = dedupeBindings(DEFAULT_BINDINGS);
+				dirty = true;
+				note = "atajos por defecto restaurados";
+				continue;
 			}
-			if (ctx.mode !== "tui" || !ctx.hasUI) {
-				ctx.ui.notify(`keymap.json: ${path}`, "info");
-				return;
+
+			if (intent.kind === "delete") {
+				const target = bindings[intent.index];
+				if (!target) continue;
+				bindings = bindings.filter((_, index) => index !== intent.index);
+				dirty = true;
+				note = `borrado ${target.key}`;
+				continue;
 			}
-			if (loaded.status === "malformed") {
-				ctx.ui.notify(`keymap.json inválido: ${loaded.problem}. Usá /keymap reset.`, "error");
-				return;
-			}
 
-			let bindings = dedupeBindings(loaded.bindings);
-			let dirty = false;
-			let note = loaded.status === "defaults" ? "todavía sin archivo: se guarda al cambiar algo" : undefined;
-
-			for (;;) {
-				const intent = await openList(ctx, bindings, path, note);
-				if (!intent) break;
-				note = undefined;
-
-				if (intent.kind === "reset") {
-					bindings = dedupeBindings(DEFAULT_BINDINGS);
-					dirty = true;
-					note = "atajos por defecto restaurados";
-					continue;
-				}
-
-				if (intent.kind === "delete") {
-					const target = bindings[intent.index];
-					if (!target) continue;
-					bindings = bindings.filter((_, index) => index !== intent.index);
-					dirty = true;
-					note = `borrado ${target.key}`;
-					continue;
-				}
-
-				if (intent.kind === "edit") {
-					const target = bindings[intent.index];
-					if (!target) continue;
-					const key = await captureKey(ctx, `/${target.command}`, (candidate) =>
-						validateKey(candidate, { reserved, bindings, editing: intent.index }),
-					);
-					if (!key) continue;
-					bindings = bindings.map((binding, index) => (index === intent.index ? { ...binding, key } : binding));
-					dirty = true;
-					note = `${target.key} → ${key}`;
-					continue;
-				}
-
-				const answer = await ctx.ui.input("Comando a vincular (sin la barra)", "gentle:customize");
-				if (!answer || !answer.trim()) continue;
-				const command = answer.trim().replace(/^\//, "");
-				const known = pi.getCommands().some((entry) => entry.name === command);
-				const key = await captureKey(ctx, `/${command}`, (candidate) =>
-					validateKey(candidate, { reserved, bindings }),
+			if (intent.kind === "edit") {
+				const target = bindings[intent.index];
+				if (!target) continue;
+				const key = await captureKey(ctx, `/${target.command}`, (candidate) =>
+					validateKey(candidate, { reserved, bindings, editing: intent.index }),
 				);
 				if (!key) continue;
-				bindings = [
-					...bindings,
-					{ key, command, ...(known ? {} : { description: "comando no registrado" }) },
-				];
+				bindings = bindings.map((binding, index) => (index === intent.index ? { ...binding, key } : binding));
 				dirty = true;
-				note = `${key} → /${command}`;
+				note = `${target.key} → ${key}`;
+				continue;
 			}
 
-			if (!dirty) return;
-			try {
-				writeKeymap(path, bindings);
-			} catch (error) {
-				ctx.ui.notify(`No pude guardar keymap.json: ${(error as Error).message}`, "error");
-				return;
-			}
-			ctx.ui.notify(`keymap.json guardado (${bindings.length} atajos).`, "info");
-			await ctx.reload();
-		},
-	});
+			const answer = await ctx.ui.input("Comando a vincular (sin la barra)", "gentle:customize");
+			if (!answer || !answer.trim()) continue;
+			const command = answer.trim().replace(/^\//, "");
+			const known = pi.getCommands().some((entry) => entry.name === command);
+			const key = await captureKey(ctx, `/${command}`, (candidate) =>
+				validateKey(candidate, { reserved, bindings }),
+			);
+			if (!key) continue;
+			bindings = [
+				...bindings,
+				{ key, command, ...(known ? {} : { description: "comando no registrado" }) },
+			];
+			dirty = true;
+			note = `${key} → /${command}`;
+		}
+
+		if (!dirty) return;
+		try {
+			writeKeymap(path, bindings);
+		} catch (error) {
+			ctx.ui.notify(`No pude guardar keymap.json: ${(error as Error).message}`, "error");
+			return;
+		}
+		ctx.ui.notify(`keymap.json guardado (${bindings.length} atajos).`, "info");
+		await ctx.reload();
+	};
+
+	// Pi has no command aliases: every spelling is its own registration. The
+	// slash menu autocompletes by name only, so `/keybinding` finds
+	// `keybindings` as a prefix; the description carries the extra words for
+	// hosts that do search it (Gentle Shell's palette does).
+	const description = "Atajos de teclado (keymap · keybinding · shortcuts): editar keymap.json";
+	for (const name of ["keymap", "keybindings", "shortcuts"]) {
+		pi.registerCommand(name, { description, handler: openKeymap });
+	}
 }

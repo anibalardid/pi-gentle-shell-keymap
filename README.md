@@ -4,7 +4,7 @@ User-editable keybindings for [Pi](https://pi.dev) and Gentle Shell, kept in one
 JSON file instead of scattered environment variables.
 
 ```
-/keymap        edit the map
+/keymap        edit the map   (aliases: /keybindings, /shortcuts)
 f2             the default binding it ships (Customization)
 ```
 
@@ -72,6 +72,12 @@ Restart Pi or run `/reload`.
 A malformed file is reported, never overwritten: `/keymap reset` recreates it.
 
 ## `/keymap`
+
+Also reachable as `/keybindings` and `/shortcuts`. Pi has no command aliases,
+so each spelling is a separate registration of the same handler; `/keybinding`
+(singular) autocompletes to `keybindings` because the slash menu matches names
+as prefixes. The description also names the other spellings, which is what
+Gentle Shell's command palette searches.
 
 ```
 › f2  /gentle:customize  Customization
