@@ -1,0 +1,20 @@
+{
+	"name": "pi-keymap",
+	"version": "0.1.0",
+	"private": true,
+	"description": "User-editable keybindings for Pi and Gentle Shell, stored in <agent-dir>/keymap.json.",
+	"type": "module",
+	"license": "MIT",
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	},
+	"scripts": {
+		"test": "node --experimental-strip-types --test test/*.test.ts",
+		"install-extension": "node scripts/install.mjs"
+	},
+	"engines": {
+		"node": ">=22.6"
+	}
+}
