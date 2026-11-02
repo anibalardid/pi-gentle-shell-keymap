@@ -5,6 +5,10 @@
 	"description": "User-editable keybindings for Pi and Gentle Shell, stored in <agent-dir>/keymap.json.",
 	"type": "module",
 	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+ssh://git@github.com/anibalardid/pi-gentle-shell-keymap.git"
+	},
 	"pi": {
 		"extensions": [
 			"./index.ts"
